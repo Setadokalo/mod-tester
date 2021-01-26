@@ -57,58 +57,71 @@ fn main() -> Result<(), Error> {
 		};
 		// On windows it doesn't matter if we lowercase path names, but linux is case sensitive
 		// so we're only using the lowercased version for matching arguments
-		let lowercase_arg = arg.to_lowercase();
-		if lowercase_arg == TARGETARG {
-			if let Some(_) = target_dir {
-				eprintln!("Warning: Reassigning target directory due to explicit assignment; check your arguments");
-			}
-			target_dir = Some(arg_iter.next().expect(&*format!("Expected argument for '{}'", TARGETARG)));
-			if let None = source_dir {
-				source_dir = target_dir.clone();
-				auto_assigned_source = true;
-			}
-		} else if lowercase_arg == SOURCEARG {
-			if !auto_assigned_source {
-				if let Some(_) = source_dir {
-					eprintln!("Warning: Reassigning source directory due to explicit assignment; check your arguments");
+		match &*arg.to_lowercase() {
+			TARGETARG => {
+				if let Some(_) = target_dir {
+					eprintln!("Warning: Reassigning target directory due to explicit assignment; check your arguments");
 				}
-			}
-			source_dir = Some(arg_iter.next().expect(&*format!("Expected argument for '{}'", SOURCEARG)));
-			auto_assigned_source = false;
-		} else if lowercase_arg == TEMPARG {
-			if let Some(_) = temp_dir {
-				eprintln!("Warning: Reassigning temporary directory due to explicit assignment; check your arguments");
-			}
-			temp_dir = Some(arg_iter.next().expect(&*format!("Expected argument for '{}'", TEMPARG)));
-		} else if lowercase_arg == PROGRAM {
-			if let Some(_) = program {
-				eprintln!("Warning: Reassigning target program due to explicit assignment; check your arguments");
-			}
-			program = Some(arg_iter.next().expect(&*format!("Expected argument for '{}'", PROGRAM)));
-		} else if lowercase_arg == "--exhaustive" || lowercase_arg == "-e" {
-			exhaustive = true;
-		} else if lowercase_arg == "--dummy" || lowercase_arg == "-d" {
-			dummy_mode = true;
-		} else if lowercase_arg == "--autorecover" || lowercase_arg == "-a" {
-			auto_recover_mode = true;
-		} else if lowercase_arg == "--help" || lowercase_arg == "-h" {
-			print_help();
-			return Ok(());
-		} else {
-			if let None = target_dir {
-				target_dir = Some(arg);
+				target_dir = Some(arg_iter.next().expect(&*format!("Expected argument for '{}'", TARGETARG)));
 				if let None = source_dir {
 					source_dir = target_dir.clone();
 					auto_assigned_source = true;
 				}
-			} else if let None = source_dir {
-				source_dir = Some(arg);
-			} else if let None = temp_dir {
-				temp_dir = Some(arg);
-			} else if let None = program {
-				program = Some(arg);
-			} else {
-				eprintln!("Warning: extra parameter detected: {}", arg);
+			},
+			SOURCEARG => {
+				if !auto_assigned_source {
+					if let Some(_) = source_dir {
+						eprintln!("Warning: Reassigning source directory due to explicit assignment; check your arguments");
+					}
+				}
+				source_dir = Some(arg_iter.next().expect(&*format!("Expected argument for '{}'", SOURCEARG)));
+				auto_assigned_source = false;
+			},
+			TEMPARG => {
+				if let Some(_) = temp_dir {
+					eprintln!("Warning: Reassigning temporary directory due to explicit assignment; check your arguments");
+				}
+				temp_dir = Some(arg_iter.next().expect(&*format!("Expected argument for '{}'", TEMPARG)));
+			},
+			PROGRAM => {
+				if let Some(_) = program {
+					eprintln!("Warning: Reassigning target program due to explicit assignment; check your arguments");
+				}
+				program = Some(arg_iter.next().expect(&*format!("Expected argument for '{}'", PROGRAM)));
+			},
+			"--exhaustive" | "-e" => {
+				exhaustive = true;
+			},
+			"--dummy" | "-d" => {
+				dummy_mode = true;
+			},
+			"--autorecover" | "-a" => {
+				auto_recover_mode = true;
+			},
+			"--help" | "-h" => {
+				print_help();
+				return Ok(());
+			},
+			_ => {
+				// fill in any variables not set by name in order, starting from target_dir.
+				// we auto-set source_dir to be target_dir if not explicitly set, but also
+				// mark it as auto-set so we can later set it implicitly.
+				if target_dir.is_none() {
+					target_dir = Some(arg);
+					if source_dir.is_none() {
+						source_dir = target_dir.clone();
+						auto_assigned_source = true;
+					}
+				} else if source_dir.is_none() || auto_assigned_source {
+					source_dir = Some(arg);
+					auto_assigned_source = false;
+				} else if temp_dir.is_none() {
+					temp_dir = Some(arg);
+				} else if program.is_none() {
+					program = Some(arg);
+				} else {
+					eprintln!("Warning: extra (unused) parameter detected: {}", arg);
+				}
 			}
 		}
 	}
