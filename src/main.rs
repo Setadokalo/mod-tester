@@ -4,15 +4,15 @@ use rand::thread_rng;
 use rand::seq::SliceRandom;
 
 #[derive(Debug)]
-enum DummyError {
+enum CliError {
 	InvalidArgument
 }
-impl Display for DummyError {
+impl Display for CliError {
     fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Ok(())
     }
 }
-impl std::error::Error for DummyError {
+impl std::error::Error for CliError {
 
 }
 
@@ -31,23 +31,23 @@ impl<'a, I, F> NestedInto<Option<I>> for Option<F>
 	}
 }
 
-const TARGETARG: &'static str = "--target";
-const SOURCEARG: &'static str = "--source";
-const TEMPARG: &'static str = "--temp";
-const PROGRAM: &'static str = "--program";
+const TARGET_ARG: &'static str = "--target";
+const SOURCE_ARG: &'static str = "--source";
+const TEMP_ARG: &'static str = "--temp";
+const PROGRAM_ARG: &'static str = "--program";
 
 fn main() -> Result<(), Error> {
 	// reading arguments
 	let mut dummy_mode: bool = false;
 	let mut auto_recover_mode: bool = false;
+	let mut exhaustive_mode = false;
+
 	let mut target_dir: Option<String> = None;
 	let mut source_dir: Option<String> = None;
-	// if target is specified but source is not, we assume they are the same directory.
 	let mut auto_assigned_source = false;
 	let mut temp_dir: Option<String> = None;
 	let mut program: Option<String> = None;
-	//TODO: Actually implement this
-	let mut exhaustive = false;
+	
 	let mut arg_iter = env::args();
 	arg_iter.next(); //the first argument is the program name which we don't give a shit about.
 	loop {
@@ -58,50 +58,41 @@ fn main() -> Result<(), Error> {
 		// On windows it doesn't matter if we lowercase path names, but linux is case sensitive
 		// so we're only using the lowercased version for matching arguments
 		match &*arg.to_lowercase() {
-			TARGETARG => {
-				if let Some(_) = target_dir {
+			TARGET_ARG => {
+				if target_dir.is_some() {
 					eprintln!("Warning: Reassigning target directory due to explicit assignment; check your arguments");
 				}
-				target_dir = Some(arg_iter.next().expect(&*format!("Expected argument for '{}'", TARGETARG)));
-				if let None = source_dir {
+				target_dir = Some(arg_iter.next().expect(&*format!("Expected argument for '{}'", TARGET_ARG)));
+				if source_dir.is_none() {
 					source_dir = target_dir.clone();
 					auto_assigned_source = true;
 				}
 			},
-			SOURCEARG => {
+			SOURCE_ARG => {
 				if !auto_assigned_source {
-					if let Some(_) = source_dir {
+					if source_dir.is_some() {
 						eprintln!("Warning: Reassigning source directory due to explicit assignment; check your arguments");
 					}
 				}
-				source_dir = Some(arg_iter.next().expect(&*format!("Expected argument for '{}'", SOURCEARG)));
+				source_dir = Some(arg_iter.next().expect(&*format!("Expected argument for '{}'", SOURCE_ARG)));
 				auto_assigned_source = false;
 			},
-			TEMPARG => {
-				if let Some(_) = temp_dir {
+			TEMP_ARG => {
+				if temp_dir.is_some() {
 					eprintln!("Warning: Reassigning temporary directory due to explicit assignment; check your arguments");
 				}
-				temp_dir = Some(arg_iter.next().expect(&*format!("Expected argument for '{}'", TEMPARG)));
+				temp_dir = Some(arg_iter.next().expect(&*format!("Expected argument for '{}'", TEMP_ARG)));
 			},
-			PROGRAM => {
-				if let Some(_) = program {
+			PROGRAM_ARG => {
+				if program.is_some() {
 					eprintln!("Warning: Reassigning target program due to explicit assignment; check your arguments");
 				}
-				program = Some(arg_iter.next().expect(&*format!("Expected argument for '{}'", PROGRAM)));
+				program = Some(arg_iter.next().expect(&*format!("Expected argument for '{}'", PROGRAM_ARG)));
 			},
-			"--exhaustive" | "-e" => {
-				exhaustive = true;
-			},
-			"--dummy" | "-d" => {
-				dummy_mode = true;
-			},
-			"--autorecover" | "-a" => {
-				auto_recover_mode = true;
-			},
-			"--help" | "-h" => {
-				print_help();
-				return Ok(());
-			},
+			"--exhaustive" | "-e" => exhaustive_mode = true,
+			"--dummy" | "-d" => dummy_mode = true,
+			"--autorecover" | "-a" => auto_recover_mode = true,
+			"--help" | "-h" => return Ok(print_help()), // this looks strange but it works since `print_help()` returns ()
 			_ => {
 				// fill in any variables not set by name in order, starting from target_dir.
 				// we auto-set source_dir to be target_dir if not explicitly set, but also
@@ -182,7 +173,7 @@ fn main() -> Result<(), Error> {
 	
 	let mut continue_searching = true;
 	while continue_searching {
-		if exhaustive {
+		if exhaustive_mode {
 			let result = exhaustive_search_for_broken_mod(
 				&mut program,
 				temp_dir.clone(),
@@ -230,7 +221,7 @@ fn main() -> Result<(), Error> {
 }
 
 fn create_error() -> Result<(), Error> {
-	Err(Error::new(ErrorKind::InvalidInput, Box::new(DummyError::InvalidArgument)))
+	Err(Error::new(ErrorKind::InvalidInput, Box::new(CliError::InvalidArgument)))
 }
 
 fn prepare_mods(source_dir: PathBuf, temp_dir: PathBuf) -> Result<Vec<OsString>, Error> {
@@ -252,10 +243,10 @@ fn print_help() {
 	println!("Usage:");
 	println!("modtester [target] [source] [temp_dir] [program]");
 	println!("Users can also specify each argument by name like so:");
-	println!("--target <target>");
-	println!("--source <source>");
-	println!("--temp_dir <temp_dir>");
-	println!("--program <program>");
+	println!("{} <target>", TARGET_ARG);
+	println!("{} <source>", SOURCE_ARG);
+	println!("{} <temp_dir>", TEMP_ARG);
+	println!("{} <program>", PROGRAM_ARG);
 	println!("Arguments specified by name do not need to be in order.");
 	println!("If an argument has already been specified by name, the matching on unnamed arguments will skip it.");
 	println!("For example: Running the command \"modtester --source C:/Uglystinky C:/Facelikearat C:/donkeylookingman\"");
